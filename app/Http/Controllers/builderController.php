@@ -1,0 +1,808 @@
+<?php
+
+
+namespace App\Http\Controllers;
+use App;
+use Password;
+use Illuminate\Http\Request;
+use Illuminate\Contracts\Auth\PasswordBroker;
+use Illuminate\Foundation\Auth\ResetsPasswords;
+use Input;
+use Redirect;
+use Session;
+use Validator;
+use App\User;
+use App\UserDetail;
+use App\State;
+use Auth;
+use DB;
+use Mail;
+use Response;
+
+use App\Property;
+use App\Inclusion;
+use App\PropertyGallery;
+use App\PropertyInclusion;
+use App\PropertyFloorImage;
+use App\BuilderDetail;
+use App\PageContent;
+use App\Models\PropertyDisplayHome;
+
+class builderController extends Controller
+{
+
+	public function enquirymanagement(){
+		$user = Auth::user();
+		$user_id = $user->id; 
+		$data['title'] = 'Enquiry Management';
+		$data['enquiry'] = Property::getenquirybyuser($user_id);
+		return view('enquiry_management.enquiry_management',$data);
+	}
+
+	public function delete_enquery($prop_id)
+	{
+		DB::table('enquiry_details')->where('id',$prop_id)->delete();
+		Session::flash('success', 'Enquiry has been deleted successfully.');
+
+		return redirect()->back();
+	}
+
+	public function propertymanagement(){
+		$user = Auth::user();
+		$user_id = $user->id; 
+		$data['title'] = 'Property Management';
+		$data['property'] = Property::getproprtybyuser($user_id);
+		return view('property_management.property_management',$data);
+	}
+	
+	public function get_house_lands(){
+		$user = Auth::user();
+		$user_id = $user->id; 
+		$data['title'] = 'Property Management';
+		$data['property'] = Property::gethouselandbyuser($user_id);
+		return view('property_management.houseland_management',$data);
+	}
+	
+	//Function for loading Add Property page
+	public function addproperty(){
+		$inclusions = Inclusion::where(['parent_id'=>'0'])->get();
+		$data['inclusions_arr'] = $inclusions->toArray();
+		$data['title'] = 'Add Property';
+		return view('property_management.addproperty',$data);
+	}
+	
+	//Function for loading Add Property page
+	public function add_house_land(){
+		$inclusions = Inclusion::where(['parent_id'=>'0'])->get();
+		$data['inclusions_arr'] = $inclusions->toArray();
+		$data['title'] = 'Add House and Land';
+		return view('property_management.addhouseandland',$data);
+	}
+	
+	public function addpropertypost(){
+		//print_r($_POST);die;
+		$input = Input::all();
+		//dd($input);
+		$rules = array(
+			'property_title'    => 'required',
+			'price' => 'required',
+			'description' => 'required',
+			'bedrooms' => 'required',
+			'cars' => 'required',
+			'housesize' => 'required',
+			'bathrooms' => 'required',
+			'stories' => 'required',
+			'min_block_width' => 'required',
+			'living' => 'required',
+			'min_block_length' => 'required',
+		);
+
+		// run the validation rules on the inputs from the form
+		$validator = Validator::make(Input::all(), $rules);
+
+		// if the validator fails, redirect back to the form
+		if ($validator->fails()) {
+				return Redirect::to('/propertymanagement/addproperty')
+				->withErrors($validator) // send back all errors to the login form
+				->withInput(); // send back the input so that we can repopulate the form
+		}
+		else{
+				$data = Property::addproperty($input);
+				//echo '<pre>';print_r($data);die('asdf');
+				if($data['msg'] == 'Failure'){
+					return Redirect::to('/propertymanagement/addproperty')->withInput()->with('message', 'Not able to save information, please try again.');
+				}else{
+					$pid = $data['msg'];
+					\Session::flash('success', 'Property has been saved.');
+					return redirect("/propertymanagement/editproperty/$pid");
+				}
+		}
+	}
+	
+	
+	public function save_house_land(){
+		//print_r($_POST);die;
+		$input = Input::all();
+		//dd($input);
+		$rules = array(
+			'property_title'    => 'required',
+			'price' => 'required',
+			'description' => 'required',
+			'bedrooms' => 'required',
+			'cars' => 'required',
+			'housesize' => 'required',
+			'land_size' => 'required',
+			'bathrooms' => 'required',
+			'stories' => 'required',
+			'min_block_width' => 'required',
+			'living' => 'required',
+			'min_block_length' => 'required',
+		);
+
+		// run the validation rules on the inputs from the form
+		$validator = Validator::make(Input::all(), $rules);
+
+		// if the validator fails, redirect back to the form
+		if ($validator->fails()) {
+				return Redirect::to('/builder/house-and-land/add')
+				->withErrors($validator) // send back all errors to the login form
+				->withInput(); // send back the input so that we can repopulate the form
+		}
+		else{
+				$data = Property::addhouseland($input);
+				//echo '<pre>';print_r($data);die('asdf');
+				if($data['msg'] == 'Failure'){
+					return Redirect::to('/builder/house-and-land/add')->withInput()->with('message', 'Not able to save information, please try again.');
+				}else{
+					$pid = $data['msg'];
+					\Session::flash('success', 'House and Land has been saved.');
+					return redirect("/builder/house-and-land/edit/$pid");
+				}
+		}
+	}
+	
+	//Function for loading Edit Property page
+	
+	public function editproperty($id){
+		$data['title'] = 'Edit Property';
+		$inclusions = Inclusion::where(['parent_id'=>'0'])->get();
+		$data['inclusions_arr'] = $inclusions->toArray();
+		$data['property'] = Property::getpropertybyid($id);
+		$data['id'] = $id;
+		$prop_inc  = PropertyInclusion::where(['property_id'=>$id])->get();
+		$gallery = PropertyGallery::where(['property_id' => $id])->get();
+		$floorimage = PropertyFloorImage::where(['property_id' => $id])->get();
+		$data['gallery_arr'] = $gallery->toArray();
+		$data['floorimage']  = $floorimage->toArray();
+		$data['prop_inc_arr']  = $prop_inc->toArray();
+		return view('property_management.editproperty',$data);
+	}
+	
+	
+	public function edit_house_land($id){
+		$data['title'] = 'Edit House and Land';
+		$inclusions = Inclusion::where(['parent_id'=>'0'])->get();
+		$data['inclusions_arr'] = $inclusions->toArray();
+		$data['property'] = Property::getpropertybyid($id);
+		$data['id'] = $id;
+		$prop_inc  = PropertyInclusion::where(['property_id'=>$id])->get();
+		$gallery = PropertyGallery::where(['property_id' => $id])->get();
+		$floorimage = PropertyFloorImage::where(['property_id' => $id])->get();
+		$data['gallery_arr'] = $gallery->toArray();
+		$data['floorimage']  = $floorimage->toArray();
+		$data['prop_inc_arr']  = $prop_inc->toArray();
+		return view('property_management.edithouseland',$data);
+	}
+	
+	
+	//Function for edit property
+	public function editpropertypost($id){
+		//print_r($_POST);die;
+		$input = Input::all();
+		//dd($input);
+		$rules = array(
+			'property_title'    => 'required',
+			'price' => 'required',
+			'description' => 'required',
+			'bedrooms' => 'required',
+			'cars' => 'required',
+			'housesize' => 'required',
+			'bathrooms' => 'required',
+			'stories' => 'required',
+			'min_block_width' => 'required',
+			'living' => 'required',
+			'min_block_length' => 'required',
+		);
+
+		// run the validation rules on the inputs from the form
+		$validator = Validator::make(Input::all(), $rules);
+
+		// if the validator fails, redirect back to the form
+		if ($validator->fails()) {
+				return Redirect::to('/propertymanagement/addproperty')
+				->withErrors($validator) // send back all errors to the login form
+				->withInput(); // send back the input so that we can repopulate the form
+		}
+		else{
+			$properties = Property::where(['id' => $_POST['id']])->first();
+			
+			if(!empty(Input::file('brochure'))) {
+				if (Input::file('brochure')->isValid()) {
+					$destinationPath = 'uploads/brochure'; // upload path
+					$extension = Input::file('brochure')->getClientOriginalExtension(); // getting image extension
+					$fileName = rand(11111,99999).'-simp'.'.'.$extension; // renameing image
+					Input::file('brochure')->move($destinationPath, $fileName); // uploading file to given path
+					$properties->brochure = $fileName;
+				}
+			}
+
+
+			if(!empty(Input::file('promotional_brochure'))) {
+				if (Input::file('promotional_brochure')->isValid()) {
+					$destinationPath = 'uploads/brochure'; // upload path
+					$extension = Input::file('promotional_brochure')->getClientOriginalExtension(); // getting image extension
+					$fileName = rand(11111,99999).'-prom'.'.'.$extension; // renameing image
+					Input::file('promotional_brochure')->move($destinationPath, $fileName); // uploading file to given path
+					$properties->promotional_brochure = $fileName;
+				}
+			}
+		
+		
+			$properties->property_title = $_POST['property_title'];
+			$properties->description = $_POST['description'];
+			$properties->bedrooms = $_POST['bedrooms'];
+			$properties->cars = $_POST['cars'];
+			$properties->housesize = $_POST['housesize'];
+			$properties->bathrooms = $_POST['bathrooms'];
+			$properties->stories = $_POST['stories'];
+			$properties->min_block_width = $_POST['min_block_width'];
+			$properties->min_block_length = $_POST['min_block_length'];
+			$properties->living = $_POST['living'];
+			$properties->price = $_POST['price'];
+			if(!empty($_POST['alfresco'])) {
+				$alfresco = $_POST['alfresco'];
+			} else {
+				$alfresco = 'No' ;
+			}
+			if(!empty($_POST['dual_occ'])) {
+				$dual_occ = $_POST['dual_occ'];
+			} else {
+				$dual_occ = 'No' ;
+			}
+			$properties->alfresco = $alfresco;
+
+			$properties->dual_occ = $dual_occ;
+
+			/*  echo '<pre>';
+			print_r($builders);
+			die; */
+
+			$properties->save();
+			\Session::flash('success', 'Property has been saved.');
+			return redirect("/propertymanagement/editproperty/$id");
+		}
+	}
+	
+	
+	public function update_house_land($id){
+		//print_r($_POST);die;
+		$input = Input::all();
+		//dd($input);
+		$rules = array(
+			'property_title'    => 'required',
+			'price' => 'required',
+			'description' => 'required',
+			'bedrooms' => 'required',
+			'cars' => 'required',
+			'housesize' => 'required',
+			'land_size' => 'required',
+			'bathrooms' => 'required',
+			'stories' => 'required',
+			'min_block_width' => 'required',
+			'living' => 'required',
+			'min_block_length' => 'required',
+		);
+
+		// run the validation rules on the inputs from the form
+		$validator = Validator::make(Input::all(), $rules);
+
+		// if the validator fails, redirect back to the form
+		if ($validator->fails()) {
+				return Redirect::to('/builder/house-and-land/edit/'.$id)
+				->withErrors($validator) // send back all errors to the login form
+				->withInput(); // send back the input so that we can repopulate the form
+		}
+		else{
+			$properties = Property::where(['id' => $_POST['id']])->first();
+			
+			if(!empty(Input::file('brochure'))) {
+				if (Input::file('brochure')->isValid()) {
+					$destinationPath = 'uploads/brochure'; // upload path
+					$extension = Input::file('brochure')->getClientOriginalExtension(); // getting image extension
+					$fileName = rand(11111,99999).'-simp'.'.'.$extension; // renameing image
+					Input::file('brochure')->move($destinationPath, $fileName); // uploading file to given path
+					$properties->brochure = $fileName;
+				}
+			}
+
+
+			if(!empty(Input::file('promotional_brochure'))) {
+				if (Input::file('promotional_brochure')->isValid()) {
+					$destinationPath = 'uploads/brochure'; // upload path
+					$extension = Input::file('promotional_brochure')->getClientOriginalExtension(); // getting image extension
+					$fileName = rand(11111,99999).'-prom'.'.'.$extension; // renameing image
+					Input::file('promotional_brochure')->move($destinationPath, $fileName); // uploading file to given path
+					$properties->promotional_brochure = $fileName;
+				}
+			}
+		
+		
+			$properties->property_title = $_POST['property_title'];
+			$properties->description = $_POST['description'];
+			$properties->bedrooms = $_POST['bedrooms'];
+			$properties->cars = $_POST['cars'];
+			$properties->housesize = $_POST['housesize'];
+			$properties->bathrooms = $_POST['bathrooms'];
+			$properties->stories = $_POST['stories'];
+			$properties->min_block_width = $_POST['min_block_width'];
+			$properties->min_block_length = $_POST['min_block_length'];
+			$properties->living = $_POST['living'];
+			$properties->price = $_POST['price'];
+			$property->land_size 		= $_POST['land_size'];
+			$property->house_land_address 			= $_POST['house_land_address'];
+			$property->property_type 			= '2';
+			if(!empty($_POST['alfresco'])) {
+				$alfresco = $_POST['alfresco'];
+			} else {
+				$alfresco = 'No' ;
+			}
+			if(!empty($_POST['dual_occ'])) {
+				$dual_occ = $_POST['dual_occ'];
+			} else {
+				$dual_occ = 'No' ;
+			}
+			$properties->alfresco = $alfresco;
+
+			$properties->dual_occ = $dual_occ;
+
+			/*  echo '<pre>';
+			print_r($builders);
+			die; */
+
+			$properties->save();
+			\Session::flash('success', 'Property has been saved.');
+			return redirect("/builder/house-and-land/edit/$id");
+		}
+	}
+	
+	public function propertyinclusions(){
+		$input = Input::all();
+		//dd($input);
+		$propid = $_POST['property_id'];
+		$user = Auth::user();
+		$builder_id = $user->id;
+		PropertyInclusion::where('property_id', $propid)->delete();
+		$inc = Inclusion::where(['parent_id'=>'0'])->get();
+		$inc_arr  = $inc->toArray();
+		foreach($inc_arr as $inc_val)
+		{
+			$inc1 = Inclusion::where(['parent_id'=>$inc_val['id']])->get();
+			$inc_arr1  = $inc1->toArray();
+			foreach($inc_arr1 as $inc1_val)
+			{
+					if(!empty($input['inc_'.$inc1_val['id']]) && !empty($input['inc_type_'.$inc1_val['id']]))
+					{
+						echo $input['inc_'.$inc1_val['id']];
+						$prop_inc = new PropertyInclusion ;
+						$prop_inc->property_id = $propid;
+						$prop_inc->inclusion_id = $input['inc_'.$inc1_val['id']];
+						$prop_inc->builder_id = $builder_id;
+						$prop_inc->inclusion_type = $input['inc_type_'.$inc1_val['id']];
+						$prop_inc->save();
+					}
+				
+			}
+		
+		}
+		Session::flash('success', 'Property inclusion has been updated');
+
+		return redirect()->back();
+	}
+	
+	//Function for viewproperty
+	public function viewproperty($prop_id)
+	{
+		$results = Property::with('builder_detail','property_gallery','property_floor_plans','property_inclusions')->where(['id' => $prop_id])->get();
+		//$results = User::with('builders')->where($where_arr)->get();
+		$data['prop_arr'] = $results->toArray();
+		$inc = Inclusion::where(['parent_id'=>'0'])->get();
+		$data['inc_arr']  = $inc->toArray();
+		$data['title'] = 'View Property';
+		return view('property_management.viewproperty', $data);
+	}
+	
+	public function view_house_land($prop_id)
+	{
+		$results = Property::with('builder_detail','property_gallery','property_floor_plans','property_inclusions')->where(['id' => $prop_id])->get();
+		//$results = User::with('builders')->where($where_arr)->get();
+		$data['prop_arr'] = $results->toArray();
+		$inc = Inclusion::where(['parent_id'=>'0'])->get();
+		$data['inc_arr']  = $inc->toArray();
+		$data['title'] = 'View Property';
+		return view('property_management.viewhouseland', $data);
+	}
+	
+	//Function for delete property
+	public function delete_property($prop_id)
+	{
+		PropertyInclusion::where('property_id', $prop_id)->delete();
+		$propfgallery  = PropertyFloorImage::where('property_id', $prop_id)->get();
+		$propfgall_arr = 	$propfgallery->toArray();
+		foreach($propfgall_arr as $img_val)
+		{
+			$img = $img_val['image'];
+			$upload_path = '/uploads/property_floor/';
+			unlink(base_path().$upload_path.$img);
+			$img_id =  $img_val['id'];
+			$fgallery_image = PropertyFloorImage::find($img_id);    
+			$fgallery_image->delete();
+		}
+		
+		$propgallery  = PropertyGallery::where('property_id', $prop_id)->get();
+		$propgall_arr = 	$propgallery->toArray();
+		foreach($propgall_arr as $img_val)
+		{
+			$img = $img_val['image'];
+			$upload_path = '/uploads/property_gallery/';
+			unlink(base_path().$upload_path.$img);
+			$img_id =  $img_val['id'];
+			$gallery_image = PropertyGallery::find($img_id);    
+			$gallery_image->delete();
+		}
+		Property::where('id', $prop_id)->delete();
+		Session::flash('success', 'Property & its content has been deleted successfully.');
+
+		return redirect()->back();
+	}
+	
+	
+	//Function for delete property
+	public function delete_house_land($prop_id)
+	{
+		PropertyInclusion::where('property_id', $prop_id)->delete();
+		$propfgallery  = PropertyFloorImage::where('property_id', $prop_id)->get();
+		$propfgall_arr = 	$propfgallery->toArray();
+		foreach($propfgall_arr as $img_val)
+		{
+			$img = $img_val['image'];
+			$upload_path = '/uploads/property_floor/';
+			unlink(base_path().$upload_path.$img);
+			$img_id =  $img_val['id'];
+			$fgallery_image = PropertyFloorImage::find($img_id);    
+			$fgallery_image->delete();
+		}
+		
+		$propgallery  = PropertyGallery::where('property_id', $prop_id)->get();
+		$propgall_arr = 	$propgallery->toArray();
+		foreach($propgall_arr as $img_val)
+		{
+			$img = $img_val['image'];
+			$upload_path = '/uploads/property_gallery/';
+			unlink(base_path().$upload_path.$img);
+			$img_id =  $img_val['id'];
+			$gallery_image = PropertyGallery::find($img_id);    
+			$gallery_image->delete();
+		}
+		Property::where('id', $prop_id)->delete();
+		Session::flash('success', 'House & land  content has been deleted successfully.');
+
+		return redirect()->back();
+	}
+	
+	//Function for upload images to gallery
+	public function gallery_images($prop){ 
+		//echo 'here';die;
+		$input = Input::file('galleryimage');
+		//$prop = Session::get('propid');
+		
+
+		$returnfile = array();
+		$i=0;
+		foreach ($input as $file) {
+			// Validate each file
+			$rules = array('galleryimage' => 'required'); // 'required|mimes:png,gif,jpeg,txt,pdf,doc'
+			$validator = Validator::make(array('galleryimage'=> $file), $rules);
+			if($validator->passes()) {
+				$destinationPath = 'uploads/property_gallery'; // upload path
+				//$filename = $file->getClientOriginalName(); 
+				$extension = $file->getClientOriginalName(); // getting file extension
+				$fileName = rand(11111, 99999) . '-gallery-'.$prop.'.' . $extension; // renameing image
+				
+				$upload_success = $file->move($destinationPath, $fileName);
+				 if ($upload_success) 
+				 {
+					$propgallery = new PropertyGallery;
+					$propgallery->property_id = $prop;
+					$propgallery->image = $fileName;
+					$status = 'confirmed';
+					$propgallery->save();
+					$last_ins_id = $propgallery->id;
+					$returnfile[$i]['id'] = $last_ins_id;
+					$returnfile[$i]['image'] = $fileName;
+				}
+				$i++;
+
+				// Flash a message and return the user back to a page...
+			} else {
+				// redirect back with errors.
+				echo 'failed';
+			}
+		}
+		$returnfile = json_encode($returnfile);
+		echo $returnfile;
+	}
+	
+	
+	//Function for upload images to Floor
+	public function floor_images($prop){ 
+		//echo 'here';die;
+		$input = Input::file('floorplanimage');
+		//$prop = Session::get('propid');
+		
+
+		$returnfile = array();
+		$i=0;
+		foreach ($input as $file) {
+			// Validate each file
+			$rules = array('floorplanimage' => 'required'); // 'required|mimes:png,gif,jpeg,txt,pdf,doc'
+			$validator = Validator::make(array('floorplanimage'=> $file), $rules);
+			if($validator->passes()) {
+				$destinationPath = 'uploads/property_floor'; // upload path
+				//$filename = $file->getClientOriginalName(); 
+				$extension = $file->getClientOriginalName(); // getting file extension
+				$fileName = rand(11111, 99999) . '-floor-'.$prop.'.' . $extension; // renameing image
+				
+				$upload_success = $file->move($destinationPath, $fileName);
+				 if ($upload_success) 
+				 {
+					$propgallery = new PropertyFloorImage;
+					$propgallery->property_id = $prop;
+					$propgallery->image = $fileName;
+					$propgallery->save();
+					$last_ins_id = $propgallery->id;
+					$returnfile[$i]['id'] = $last_ins_id;
+					$returnfile[$i]['image'] = $fileName;
+				}
+				$i++;
+
+				// Flash a message and return the user back to a page...
+			} else {
+				// redirect back with errors.
+				echo 'failed';
+			}
+		}
+		$returnfile = json_encode($returnfile);
+		echo $returnfile;
+	}
+	
+	
+	public function remove_galleryimg(){
+		$img_id = $_GET['imgid'];
+		$gallery_image = PropertyGallery::find($img_id);
+		$img = $gallery_image->image;
+		$upload_path = '/uploads/property_gallery/';
+        unlink(base_path().$upload_path.$img);
+        $gallery_image->delete();
+	}
+	
+	public function remove_floorimg(){
+		$img_id = $_GET['imgid'];
+		$floor_image = PropertyFloorImage::find($img_id);
+		$img = $floor_image->image;
+		$upload_path = '/uploads/property_floor/';
+        unlink(base_path().$upload_path.$img);
+        $floor_image->delete();
+	}
+	
+	//Function to download pdf file
+	
+	public function getDownloadfile($file){
+        //PDF file is stored under project/public/download/info.pdf
+        $files = $_SERVER['DOCUMENT_ROOT'].'/uploads/brochure/'.$file;
+        //echo $files;die;
+        $headers = array(
+              'Content-Type: application/octet-stream',
+            );
+        return Response::download($files, $file, $headers);
+	}
+	
+	//Function for our builders section
+	public function ourbuilders(){
+		$header_state = Session::get('header_state');
+		$headr_state  =   !empty($header_state) ? $header_state : 'VIC' ;
+		$builderdetail = DB::table('builder_details')
+            ->join('users_locations', 'builder_details.builder_id', '=', 'users_locations.user_id')
+            ->join('states', 'users_locations.state_id', '=', 'states.id')
+            ->distinct('states.state_name')
+			->where(array('builder_details.trash'=>'no','states.trash'=>'no'))
+            ->select('builder_details.*', 'states.state_name')
+            ->get();
+        $prop_arr = array();
+        $states = DB::table('states')->select('state_name')->distinct('states.state_name')->where('trash','no')->orderBy('id','asc')->get();
+		//$builderdetail = BuilderDetail::get();
+		
+		foreach($states as $val){
+			$i=0;
+			foreach($builderdetail as $propval){
+				if($propval->state_name == $val->state_name){
+					if($propval->featured == 'Yes'){
+						$prop_arr['featured'][$propval->state_name][$i] = $propval;
+					}else{
+						$prop_arr['extended'][$propval->state_name][$i] = $propval;
+					}
+				}
+				$i++;
+			}
+		}
+		//echo '<pre>'; print_r($builderdetail); echo '</pre>';
+		//echo '<pre>'; print_r($prop_arr); echo '</pre>';die;
+		$data['builderdetail']  = $prop_arr;
+		$data['states']  = $states;
+		$data['title'] = 'Our Builders';
+		$about = PageContent::where(['slug'=>'our-builders','content_type'=>'Page'])->get();
+		$data['builder'] = $about->toArray();
+		return view('builder_managment.ourbuilder', $data);
+	}
+	
+		//Function for our builders section
+	public function our_builders($state){
+		$header_state = Session::get('header_state');
+		$headr_state  =   !empty($header_state) ? $header_state : 'VIC' ;
+		$builderdetail = DB::table('builder_details')
+            ->join('users_locations', 'builder_details.builder_id', '=', 'users_locations.user_id')
+            ->join('states', 'users_locations.state_id', '=', 'states.id')
+            ->distinct('states.state_name')
+			->where(array('builder_details.trash'=>'no','states.trash'=>'no'))
+            ->select('builder_details.*', 'states.state_name')
+            ->get();
+        $prop_arr = array();
+        $states = DB::table('states')->select('state_name')->distinct('states.state_name')->where('trash','no')->orderBy('id','asc')->get();
+		//$builderdetail = BuilderDetail::get();
+		
+		foreach($states as $val){
+			$i=0;
+			foreach($builderdetail as $propval){
+				if($propval->state_name == $val->state_name){
+					if($propval->featured == 'Yes'){
+						$prop_arr['featured'][$propval->state_name][$i] = $propval;
+					}else{
+						$prop_arr['extended'][$propval->state_name][$i] = $propval;
+					}
+				}
+				$i++;
+			}
+		}
+		
+		//echo '<pre>'; print_r($builderdetail); echo '</pre>';
+		//echo '<pre>'; print_r($prop_arr); echo '</pre>';die;
+		$data['builderdetail']  = $prop_arr;
+		$data['states']  = $states;
+		$data['state_name']  = $state;
+		$data['title'] = 'Our Builders';
+		$about = PageContent::where(['slug'=>'our-builders','content_type'=>'Page'])->get();
+		$data['builder'] = $about->toArray();
+		return view('builder_managment.ourbuilder', $data);
+	}
+	
+	
+	public function builderdetail($bid){
+		$results = Property::with('builder_detail','property_gallery')->where(array('user_id' => $bid,'property_type'=>'1'))->limit(3)->orderByRaw("RAND()")->get();
+		$property = $results->toArray();
+		
+		$results1 = Property::with('builder_detail','property_gallery')->where(array('user_id' => $bid,'property_type'=>'2'))->limit(3)->orderByRaw("RAND()")->get();
+		$property1 = $results1->toArray();
+		
+		$results1 = Property::with('builder_detail','property_gallery')->where(array('user_id' => $bid))->limit(10)->orderByRaw("RAND()")->get();
+		$property_arr = $results1->toArray();
+		//echo '<pre>'; print_r($property);die;
+		$builder = BuilderDetail::where(array('builder_id'=>$bid))->get();
+		$builder_email = DB::table('users')->select('email')->where(array('id'=>$bid))->first();
+		$builder_data = $builder->toArray();
+		$states_arr = DB::table('states')->select('state_name')->distinct('states.state_name')->get();
+		$states = array();
+		foreach($states_arr as $state_val) { 
+			$states[$state_val->state_name] = $state_val->state_name;
+		}
+		$data['title'] = $builder_data[0]['company_name'];
+		
+		//$builder_address = $builder_data[0]['address'];
+		//$exolode_arr = explode(' ',$builder_address);
+		//print_r($exolode_arr);
+	//	die;
+	$display_homes = "";	
+	$display_home_arr="";
+	/* 	foreach($exolode_arr as $val) { */
+		//$display_home  = PropertyDisplayHome::whereRaw("display_location LIKE '%$val%'")->groupBy('display_location');
+		$display_home  = PropertyDisplayHome::where('builder_id',$bid)->groupBy('display_location')->limit('5')->orderBy('id','desc');
+		$total_display_home  = $display_home->count();
+		if($total_display_home > 0) {
+		$query  = $display_home->get();
+		$display_home_arr  = $query->toArray();
+		$display_homes[] = $display_home_arr;
+		}
+		/* } */
+
+		/* $homes_arr = "";
+		if(!empty($display_homes)) {
+		static  $homes_arr ;
+		foreach($display_homes as $display_val) {
+			if(count($display_val)  > 0)
+			{
+				foreach($display_val as $display_home_value) {
+				if(count($homes_arr) > 5)
+				{
+					break;
+				}
+				$homes_arr[] = $display_home_value;
+				}
+			}
+		}
+		} */
+		/*  echo '<pre>';
+		print_r($homes_arr); */
+		/* 	echo '<pre>';
+		print_r($display_home_arr); 
+		die; */
+		//echo $display_home->getQuery()->toSql();
+		/* $display_home_arr  = $display_home->toArray();
+		echo '<pre>';
+		print_r($display_home_arr); */
+		//die;
+		$data['builder_data'] = $builder_data;
+		$data['display_home_arr'] = $display_homes;
+		$data['property_arr'] = $property_arr;
+		$data['states']  = $states;
+		$data['builder_email']  = $builder_email->email;
+		$data['prop_arr']  = $property;
+		$data['prop_arr1']  = $property1;
+		return view('builder_managment.builderdetail', $data);
+	}
+	
+	public function contactbuilder($id){
+		$input = Input::all();
+		//dd($input);
+		$rules = array(
+			'email'    => 'required|email',
+			'firstname' => 'required',
+			'lastname' => 'required',
+			'user_location' => 'required',
+		);
+
+		// run the validation rules on the inputs from the form
+		$validator = Validator::make(Input::all(), $rules);
+
+		// if the validator fails, redirect back to the form
+		if ($validator->fails()) {
+				return Redirect::to('/builder-detail/'.$id.'')
+				->withErrors($validator) // send back all errors to the login form
+				->withInput(Input::except('password')); // send back the input (not the password) so that we can repopulate the form
+		}
+		else{
+			$sendmail = \Mail::send('emails.contactbuilder',
+			array(
+				'firstname' => $_POST['firstname'],
+				'lastname' => $_POST['lastname'],
+				'phone' => $_POST['phone'],
+				'email' => $_POST['email'],
+				'user_location' => $_POST['user_location'],
+				'address' => $_POST['address']
+			), function($message)
+			{
+				$message->from($_POST['email']);
+				$message->to($_POST['builder_email'], $_POST['firstname'].' '.$_POST['lastname'])->subject('icompareBuilders - Query of user regarding property.');
+			});
+			\Session::flash('success', 'Your query sent to builder. You will be contacted soon.');
+			return redirect()->back();
+		}
+	}
+}
